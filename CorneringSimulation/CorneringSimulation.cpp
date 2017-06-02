@@ -10,7 +10,7 @@ using namespace std;
 int _tmain(int argc, _TCHAR* argv[])
 {
   // physics parameters
-  const double cda = 0.261;
+  const double cda = 0.27;
   const double crr = 0.0033;
   const double mass = 80;
   const double wattage = 259;
@@ -26,7 +26,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
   // rider-confidence parameters
   const double maxBrakingGs = 0.8;
-  const double maxCorneringGs = 0.9;
+  const double maxCorneringGs = 0.5;
 
   const double maxBrakingAccel = maxBrakingGs * 9.81;
   const double maxCorneringAccel = maxCorneringGs * 9.81;
@@ -48,7 +48,7 @@ int _tmain(int argc, _TCHAR* argv[])
       const double accel = totalForce / mass;
       startSpeed += accel * dt;
 
-      if(abs(accel) < 0.0001)
+      if(abs(accel) < 0.00001)
       {
         terminalVelocity = startSpeed;
         break;
@@ -78,6 +78,8 @@ int _tmain(int argc, _TCHAR* argv[])
   // corner starts at cornerPosition, continues until cornerPosition+corneringLength
   while(position < simLength)
   {
+    bool skipFile = false;
+
     if(position < cornerPosition)
     {
       // not cornering yet, but we need to watch for braking
@@ -88,7 +90,10 @@ int _tmain(int argc, _TCHAR* argv[])
       // calculated from kinematic equation: v2^2 = v1^2 + 2 * acceleration * distance
       // in our case, v2 is their maximum allowable speed, v1 is the cornering speed they're declerating to, acceleration is their maximum braking force, distance is how far they are from the corner
       double maxSpeedAllowed = sqrt(pow(corneringSpeed, 2) + 2 * maxBrakingAccel * distanceToCorner);
-      
+      if(maxSpeedAllowed > terminalVelocity)
+      {
+        skipFile = true;
+      }
       speed = min(maxSpeedAllowed, terminalVelocity); // assume the rider brakes perfectly if they need to, but otherwise maintains their constant-wattage terminal velocity
     }
     else if(position < cornerPosition + corneringLength)
@@ -100,17 +105,25 @@ int _tmain(int argc, _TCHAR* argv[])
     {
       // we're re-accelerating 
       const double forwardForce = wattage / speed;
-      const double rollingForce = -crr * mass;
+      const double rollingForce = -crr * mass * 9.81;
       const double aeroForce = -0.5 * cda * rho * speed * speed;
       const double totalForce = forwardForce + rollingForce + aeroForce;
       const double accel = totalForce / mass;
       speed += accel * dt;
+
+      if(abs(accel) < 0.0001)
+      {
+        skipFile = true; // we don't care about the post-acceleration phase
+      }
     }
 
     position += speed * dt;
     t += dt;
 
-    file<<t<<"\t"<<speed<<"\t"<<position<<endl;
+    if(!skipFile)
+    {
+      file<<t<<"\t"<<position<<"\t"<<speed<<endl;
+    }
   }
   file.close();
 
